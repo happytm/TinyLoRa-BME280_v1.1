@@ -10,9 +10,10 @@ class TinyLoRa
 {
 	public:
 	uint16_t frameCounter;
-	void begin(void);
+	bool begin(void);
 	void sendData(unsigned char *Data, unsigned char Data_Length, unsigned int Frame_Counter_Tx);
-
+	void Continuous_Receive(void);
+	
 	private:
 	uint8_t randomNum;
 	static const unsigned char S_Table[16][16];

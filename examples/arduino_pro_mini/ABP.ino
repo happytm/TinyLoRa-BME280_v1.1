@@ -1,62 +1,149 @@
-/******************************************************************************************
-* Copyright 2015, 2016 Ideetron B.V.
-*
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with this program.  If not, see <http://www.gnu.org/licenses/>.
-******************************************************************************************/
-#include "ATtinyLoRa.h"
-#include <tinySPI.h>
+#include <SPI.h>
+//#include <tinySPI.h>
+//#include <avr/sleep.h>
+//#include <avr/wdt.h>
 
-extern uint8_t NwkSkey[16];
-extern uint8_t AppSkey[16];
-extern uint8_t DevAddr[4];
+#define DIO0 2 
+#define DIO5 5
+#define NSS  10
+#define TEMP A2
 
-/*
-*****************************************************************************************
-* Description: S_Table used for AES encription
-*****************************************************************************************
-*/
+void RFM_NSS(bool);
+int Message=0;
+unsigned int Frame_Counter_Tx = 0x0000;
+int serialData;
 
-static const unsigned char PROGMEM TinyLoRa::S_Table[16][16] = {
-	  {0x63,0x7C,0x77,0x7B,0xF2,0x6B,0x6F,0xC5,0x30,0x01,0x67,0x2B,0xFE,0xD7,0xAB,0x76},
-	  {0xCA,0x82,0xC9,0x7D,0xFA,0x59,0x47,0xF0,0xAD,0xD4,0xA2,0xAF,0x9C,0xA4,0x72,0xC0},
-	  {0xB7,0xFD,0x93,0x26,0x36,0x3F,0xF7,0xCC,0x34,0xA5,0xE5,0xF1,0x71,0xD8,0x31,0x15},
-	  {0x04,0xC7,0x23,0xC3,0x18,0x96,0x05,0x9A,0x07,0x12,0x80,0xE2,0xEB,0x27,0xB2,0x75},
-	  {0x09,0x83,0x2C,0x1A,0x1B,0x6E,0x5A,0xA0,0x52,0x3B,0xD6,0xB3,0x29,0xE3,0x2F,0x84},
-	  {0x53,0xD1,0x00,0xED,0x20,0xFC,0xB1,0x5B,0x6A,0xCB,0xBE,0x39,0x4A,0x4C,0x58,0xCF},
-	  {0xD0,0xEF,0xAA,0xFB,0x43,0x4D,0x33,0x85,0x45,0xF9,0x02,0x7F,0x50,0x3C,0x9F,0xA8},
-	  {0x51,0xA3,0x40,0x8F,0x92,0x9D,0x38,0xF5,0xBC,0xB6,0xDA,0x21,0x10,0xFF,0xF3,0xD2},
-	  {0xCD,0x0C,0x13,0xEC,0x5F,0x97,0x44,0x17,0xC4,0xA7,0x7E,0x3D,0x64,0x5D,0x19,0x73},
-	  {0x60,0x81,0x4F,0xDC,0x22,0x2A,0x90,0x88,0x46,0xEE,0xB8,0x14,0xDE,0x5E,0x0B,0xDB},
-	  {0xE0,0x32,0x3A,0x0A,0x49,0x06,0x24,0x5C,0xC2,0xD3,0xAC,0x62,0x91,0x95,0xE4,0x79},
-	  {0xE7,0xC8,0x37,0x6D,0x8D,0xD5,0x4E,0xA9,0x6C,0x56,0xF4,0xEA,0x65,0x7A,0xAE,0x08},
-	  {0xBA,0x78,0x25,0x2E,0x1C,0xA6,0xB4,0xC6,0xE8,0xDD,0x74,0x1F,0x4B,0xBD,0x8B,0x8A},
-	  {0x70,0x3E,0xB5,0x66,0x48,0x03,0xF6,0x0E,0x61,0x35,0x57,0xB9,0x86,0xC1,0x1D,0x9E},
-	  {0xE1,0xF8,0x98,0x11,0x69,0xD9,0x8E,0x94,0x9B,0x1E,0x87,0xE9,0xCE,0x55,0x28,0xDF},
-	  {0x8C,0xA1,0x89,0x0D,0xBF,0xE6,0x42,0x68,0x41,0x99,0x2D,0x0F,0xB0,0x54,0xBB,0x16}
-	};
+static const unsigned char PROGMEM S_Table[16][16] = {
+  {0x63,0x7C,0x77,0x7B,0xF2,0x6B,0x6F,0xC5,0x30,0x01,0x67,0x2B,0xFE,0xD7,0xAB,0x76},
+  {0xCA,0x82,0xC9,0x7D,0xFA,0x59,0x47,0xF0,0xAD,0xD4,0xA2,0xAF,0x9C,0xA4,0x72,0xC0},
+  {0xB7,0xFD,0x93,0x26,0x36,0x3F,0xF7,0xCC,0x34,0xA5,0xE5,0xF1,0x71,0xD8,0x31,0x15},
+  {0x04,0xC7,0x23,0xC3,0x18,0x96,0x05,0x9A,0x07,0x12,0x80,0xE2,0xEB,0x27,0xB2,0x75},
+  {0x09,0x83,0x2C,0x1A,0x1B,0x6E,0x5A,0xA0,0x52,0x3B,0xD6,0xB3,0x29,0xE3,0x2F,0x84},
+  {0x53,0xD1,0x00,0xED,0x20,0xFC,0xB1,0x5B,0x6A,0xCB,0xBE,0x39,0x4A,0x4C,0x58,0xCF},
+  {0xD0,0xEF,0xAA,0xFB,0x43,0x4D,0x33,0x85,0x45,0xF9,0x02,0x7F,0x50,0x3C,0x9F,0xA8},
+  {0x51,0xA3,0x40,0x8F,0x92,0x9D,0x38,0xF5,0xBC,0xB6,0xDA,0x21,0x10,0xFF,0xF3,0xD2},
+  {0xCD,0x0C,0x13,0xEC,0x5F,0x97,0x44,0x17,0xC4,0xA7,0x7E,0x3D,0x64,0x5D,0x19,0x73},
+  {0x60,0x81,0x4F,0xDC,0x22,0x2A,0x90,0x88,0x46,0xEE,0xB8,0x14,0xDE,0x5E,0x0B,0xDB},
+  {0xE0,0x32,0x3A,0x0A,0x49,0x06,0x24,0x5C,0xC2,0xD3,0xAC,0x62,0x91,0x95,0xE4,0x79},
+  {0xE7,0xC8,0x37,0x6D,0x8D,0xD5,0x4E,0xA9,0x6C,0x56,0xF4,0xEA,0x65,0x7A,0xAE,0x08},
+  {0xBA,0x78,0x25,0x2E,0x1C,0xA6,0xB4,0xC6,0xE8,0xDD,0x74,0x1F,0x4B,0xBD,0x8B,0x8A},
+  {0x70,0x3E,0xB5,0x66,0x48,0x03,0xF6,0x0E,0x61,0x35,0x57,0xB9,0x86,0xC1,0x1D,0x9E},
+  {0xE1,0xF8,0x98,0x11,0x69,0xD9,0x8E,0x94,0x9B,0x1E,0x87,0xE9,0xCE,0x55,0x28,0xDF},
+  {0x8C,0xA1,0x89,0x0D,0xBF,0xE6,0x42,0x68,0x41,0x99,0x2D,0x0F,0xB0,0x54,0xBB,0x16}
+};
+
+//                              41    e2    c1    11    cf  0b      fb    8d    1d    08    98    f0    ca    a8    77    62
+unsigned char NwkSkey[16] = { 0x41, 0xe2, 0xc1, 0x11, 0xcf, 0x0b, 0xfb, 0x8d, 0x1d, 0x08, 0x98, 0xf0, 0xca, 0xa8, 0x77, 0x62 };
+//                              6e    9b    51    67    09    92    c2    40    ac    1c    f4    e2    38    9c    8d    f2
+unsigned char AppSkey[16] = { 0x6e, 0x9b, 0x51, 0x67, 0x09, 0x92, 0xc2, 0x40, 0xac, 0x1c, 0xf4, 0xe2, 0x38, 0x9c, 0x8d, 0xf2 };
+unsigned char DevAddr[4] = { 0x07, 0x00, 0x00, 0x07 };
+unsigned char data[255];
+// sleep cycles
+//volatile int sleep_count = 0;
+//const int sleep_total = 8; // 8*8s 64s sleep time
+
+void RFM_Message(){
+  Message=1;
+  }
+
+void setup() {
+  SPI.setDataMode(SPI_MODE0);
+  Serial.begin(9600);
+  SPI.begin();
+
+  pinMode(NSS, OUTPUT);
+  pinMode(DIO0, INPUT);
+  //attachInterrupt(digitalPinToInterrupt(DIO0), DIO0_Handler, CHANGE);
+  digitalWrite(NSS, HIGH);
+
+  // Turn on the watch dog timer
+  //watchdogOn();
+  Serial.println("Inciando");
+  //Initialize RFM module
+  
+  RFM_Init();
+  RFM_Continuous_Receive();
+}
+
+void loop() {
+  if(Message){
+    Serial.println("Rx:");
+    unsigned char RFM_Package_Location = 0x00;
+    unsigned char RFM_Rx_Length = 0x00;
+    if((RFM_Read(0x12) & 0x20) != 0x20){
+      Serial.println("CRC Ok");
+    }
+    else{
+      Serial.println("CRC No Ok");
+    }
+    RFM_Package_Location = RFM_Read(0x10); //Read start position of received package
+    RFM_Rx_Length = RFM_Read(0x13);      //Read length of received package
+    RFM_Write(0x0D,RFM_Package_Location); //Set SPI pointer to start of package
+    for (unsigned char i = 0x00; i < RFM_Rx_Length; i++){
+      data[i] = RFM_Read(0x00);
+      Serial.print("Dato ");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(data[i],HEX);
+     }
+     Message=0; 
+     RFM_Write(0x12, 0xFF); //Clear interrupts
+  }
+  
+  if (Serial.available()) {
+   serialData= Serial.read();
+   }
+   if(serialData=='1'){ 
+    uint16_t temp;
+    uint8_t Data[2];
+    uint8_t Data_Length = 0x02;
+
+    temp = 50;
+    Data[0] = (temp >> 8) & 0xff;
+    Data[1] = temp & 0xff;
+
+    LORA_Send_Data(Data, Data_Length, Frame_Counter_Tx);
+    Frame_Counter_Tx++;
+    Serial.println("Dato enviado");
+    // reset sleep count
+    //sleep_count = 0;
+    serialData=0;
+   }
+   else if(serialData=='2'){
+    Serial.print("Status: ");
+    Serial.println(RFM_Read(0x18),HEX);
+    Serial.print("IRQ: ");
+    Serial.println(RFM_Read(0x12),HEX);
+    Serial.print("Bytes of payload: ");
+    Serial.println(RFM_Read(0x13),HEX);
+    Serial.print("Valid headers received: ");
+    Serial.print(RFM_Read(0x14),HEX);
+    Serial.println(RFM_Read(0x14),HEX);
+    Serial.print("Mensaje: ");
+    Serial.println(Message);
+    Serial.print("OpMode: ");
+    Serial.println(RFM_Read(0x01),HEX);
+    serialData=0;
+    delay(100);
+    }
+  
+
+}
 
 /*
 *****************************************************************************************
 * Description: Function used to initialize the RFM module on startup
 *****************************************************************************************
 */
-bool TinyLoRa::begin() 
-{
-  bool detected;
-  uint8_t ver = RFM_Read(0x42);
-  if(ver!=18){    //Check the ID of the RFM95
-    return 0;
+void RFM_Init()
+{ 
+  int ver = RFM_Read(0x42);
+  if(ver==18){
+  Serial.print("SX1276 or RFM95 detected ");
+  }
+  else{
+    Serial.println("Error detecting RFM");
+    Serial.println("Check your connections");
     while(true);
   }
   //Switch RFM to sleep
@@ -64,10 +151,32 @@ bool TinyLoRa::begin()
 
   //Set RFM in LoRa mode
   RFM_Write(0x01,0x80);
-
-  //PA pin (maximal power)
+  //Set RFM in Standby mode wait on mode ready
+  RFM_Write(0x01,0x81);
+  
+  while (digitalRead(DIO5) == LOW)
+  {
+    Serial.print(".");
+  }
+  
+  //Set carrair frequency
+  // 868.100 MHz / 61.035 Hz = 14222987 = 0xD9068B
+  // 904.400 Mhz / 61.035 Hz = 14866880 = 0xE2D9C0
+  // 912.500 Mhz / 61.035 Hz = 14950438 = 0xE42026
+  // 902.300 Mhz / 61.035 Hz = 14783321 = 0xE19359
+  RFM_Write(0x06,0xE1);
+  RFM_Write(0x07,0x93);
+  RFM_Write(0x08,0x59);
+  
+  //PA pin (minimal power)
   RFM_Write(0x09,0xFF);
 
+  //Switch LNA boost on
+  //RFM_Write(0x0C,0x23);
+  
+  RFM_Write(0x1E,0xB4); //SF7 CRC On
+  RFM_Write(0x1D,0x72); //125 kHz 4/5 coding rate explicit header mode
+  RFM_Write(0x26,0x0C); //Low datarate optimization off AGC auto on 
   //Rx Timeout set to 37 symbols
   RFM_Write(0x1F,0x25);
 
@@ -75,9 +184,6 @@ bool TinyLoRa::begin()
   //0x0008 + 4 = 12
   RFM_Write(0x20,0x00);
   RFM_Write(0x21,0x08);
-
-  //Low datarate optimization off AGC auto on
-  RFM_Write(0x26,0x0C);
 
   //Set LoRa sync word
   RFM_Write(0x39,0x34);
@@ -92,143 +198,81 @@ bool TinyLoRa::begin()
   //Rx base adress
   RFM_Write(0x0F,0x00);
 
-  // init frame counter
-  uint16_t frameCounter = 0x0000;
-  return 1;
-
-}
-
-/*
-*****************************************************************************************
-* Description : Function for sending a package with the RFM
-*
-* Arguments   : *RFM_Tx_Package Pointer to arry with data to be send
-*               Package_Length  Length of the package to send
-*****************************************************************************************
-*/
-void TinyLoRa::RFM_Send_Package(unsigned char *RFM_Tx_Package, unsigned char Package_Length)
-{
-  unsigned char i;
-  //unsigned char TxDone = 0x00;
-
-  //Set RFM in Standby mode wait on mode ready
-  RFM_Write(0x01,0x81);
-  
-  // wait for standby mode
-  _delay_ms(10);
-
-  // change the channel of the RFM module
-  switch (randomNum) {
-      case 0x00: //Channel 0 868.100 MHz / 61.035 Hz = 14222987 = 0xD9068B
-        RFM_Write(0x06,0xD9);
-        RFM_Write(0x07,0x06);
-        RFM_Write(0x08,0x8B);
-        break;
-      case 0x01: //Channel 1 868.300 MHz / 61.035 Hz = 14226264 = 0xD91358
-        RFM_Write(0x06,0xD9);
-        RFM_Write(0x07,0x13);
-        RFM_Write(0x08,0x58);
-        break;
-      case 0x02: //Channel 2 868.500 MHz / 61.035 Hz = 14229540 = 0xD92024
-        RFM_Write(0x06,0xD9);
-        RFM_Write(0x07,0x20);
-        RFM_Write(0x08,0x24);
-        break;
-      case 0x03: //Channel 3 867.100 MHz / 61.035 Hz = 14206603 = 0xD8C68B
-		RFM_Write(0x06,0xD8);
-		RFM_Write(0x07,0xC6);
-		RFM_Write(0x08,0x8B);
-        break;
-  }
-
-  /*	
-  //SF7 BW 125 kHz
-  RFM_Write(0x1E,0x74); //SF7 CRC On
-  RFM_Write(0x1D,0x72); //125 kHz 4/5 coding rate explicit header mode
-  RFM_Write(0x26,0x04); //Low datarate optimization off AGC auto on
-  */
-
-  //SF10 BW 125 kHz
-  RFM_Write(0x1E,0xA4); //SF10 CRC On
-  RFM_Write(0x1D,0x72); //125 kHz 4/5 coding rate explicit header mode
-  RFM_Write(0x26,0x04); //Low datarate optimization off AGC auto on
- 
-  //Set payload length to the right length
-  RFM_Write(0x22,Package_Length);
-
-  //Set SPI pointer to start of Tx part in FiFo
-  RFM_Write(0x0D,0x80);
-
-  //Write Payload to FiFo
-  for (i = 0;i < Package_Length; i++)
-  {
-    RFM_Write(0x00,*RFM_Tx_Package);
-    RFM_Tx_Package++;
-  }
-
-  //Switch RFM to Tx
-  RFM_Write(0x01,0x83);
- 
-  //Wait for TxDone in the RegIrqFlags register
-  while(RFM_Read(0x12) & 0x08) { }
-
-  //Clear interrupt
-  RFM_Write(0x12,0x08);
-
   //Switch RFM to sleep
   RFM_Write(0x01,0x00);
+  Serial.println("Configured");
+}
+
+
+
+/*
+*****************************************************************************************
+* Description : Function for change just the bits of operation mode
+*
+* Arguments   : mode just use the 3 first bits
+*               X000 = Sleep mode
+*               X001 = Stdby mode
+*               X010 = FS mode TX (FSTx)
+*               X011 = Transmitter mode (Tx)
+*               X100 = FS mode RX (FSRx) 
+*               X101 = Receiver continuous mode
+*               x110 = Receiver single mode
+*               x111 = Channel activity detection
+*****************************************************************************************
+*/
+void RFM_OpMode (int mode) {
+    RFM_Write(0x01, 0x80 | mode); //
 }
 
 
 /*
 *****************************************************************************************
-* Description : Funtion that writes a register from the RFM
-*
-* Arguments   : RFM_Address Address of register to be written
-*
-* RFM_Data    Data to be written
+* Description : Function to switch RFM to continuous receive mode, used for Class C 
 *****************************************************************************************
 */
-void TinyLoRa::RFM_Write(unsigned char RFM_Address, unsigned char RFM_Data) 
+void RFM_Continuous_Receive(void)
 {
-  //Set NSS pin Low to start communication
-  digitalWrite(NSS_RFM,LOW);
+  attachInterrupt(0, RFM_Message, RISING);
+  //Clear all interrupts
+  //RFM_Write(0x12, 0xFF);
+  //Change DIO 0 back to RxDone
+  RFM_Write(0x40,0x00);
 
-  //Send Addres with MSB 1 to make it a writ command
-  SPI.transfer(RFM_Address | 0x80);
-  //Send Data
-  SPI.transfer(RFM_Data);
+  //Invert IQ Back
+  RFM_Write(0x33,0x67);
+  RFM_Write(0x3B,0x19);
+  
+  //Change Datarate
+  //RFM_Write(0x1E,0xA4); //SF10 CRC On
+  //RFM_Write(0x1D,0x72); //125 kHz 4/5 coding rate explicit header mode
+  RFM_Write(0x1E,0x84); //SF8 CRC On
+  RFM_Write(0x1D,0x92); //500 kHz 4/5 coding rate explicit header mode
+  RFM_Write(0x26,0x04); //Low datarate optimization off AGC auto on
+  //Sensitivity offset to Bw 500khz
+  RFM_Write(0x36,0x02);
+  RFM_Write(0x3a,0x64);
+  //Set Hop frequency Period to 0
+  RFM_Write(0x24,0x00);
+  
+  //Set carrair frequency
+  // 904.400 Mhz / 61.035 Hz = 14866880 = 0xE2D9C0
+  // 912.500 Mhz / 61.035 Hz = 14950438 = 0xE42026
+  // 902.300 Mhz / 61.035 Hz = 14783321 = 0xE19359
+  // 923.300 Mhz / 61.035 Hz = 15127386 = 0xE6D35A . 
+  RFM_Write(0x06,0xE6);
+  RFM_Write(0x07,0xD3);
+  RFM_Write(0x08,0x5A);
 
-  //Set NSS pin High to end communication
-  digitalWrite(NSS_RFM,HIGH);
+  //Switch to continuous receive
+  //Set operation mode to Rx continuous
+  RFM_Write(0x01,0x85);  
+  while (digitalRead(DIO5) == LOW){}
+
 }
-/*
-*****************************************************************************************
-* Description : Funtion that reads a register from the RFM and returns the value
-*
-* Arguments   : RFM_Address Address of register to be read
-*
-* Returns   : Value of the register
-*****************************************************************************************
-*/
-unsigned char TinyLoRa::RFM_Read(unsigned char RFM_Address)
-{
-  unsigned char RFM_Data;
 
-  //Set NSS pin low to start SPI communication
-  digitalWrite(NSS_RFM, LOW);
 
-  //Send Address
-  SPI.transfer(RFM_Address);
-  //Send 0x00 to be able to receive the answer from the RFM
-  RFM_Data = SPI.transfer(0x00);
 
-  //Set NSS high to end communication
-  digitalWrite(NSS_RFM, HIGH);
 
-  //Return received data
-  return RFM_Data;
-}
 /*
 *****************************************************************************************
 * Description : Function contstructs a LoRaWAN package and sends it
@@ -238,7 +282,7 @@ unsigned char TinyLoRa::RFM_Read(unsigned char RFM_Address)
 *               Frame_Counter_Up  Frame counter of upstream frames
 *****************************************************************************************
 */
-void TinyLoRa::sendData(unsigned char *Data, unsigned char Data_Length, unsigned int Frame_Counter_Tx)
+void LORA_Send_Data(unsigned char *Data, unsigned char Data_Length, unsigned int Frame_Counter_Tx)
 {
   //Define variables
   unsigned char i;
@@ -260,7 +304,7 @@ void TinyLoRa::sendData(unsigned char *Data, unsigned char Data_Length, unsigned
   //Encrypt the data
   Encrypt_Payload(Data, Data_Length, Frame_Counter_Tx, Direction);
 
-  
+
   //Build the Radio Package
   RFM_Data[0] = Mac_Header;
 
@@ -287,7 +331,7 @@ void TinyLoRa::sendData(unsigned char *Data, unsigned char Data_Length, unsigned
 
   //Add data Lenth to package length
   RFM_Package_Length = RFM_Package_Length + Data_Length;
-  
+
   //Calculate MIC
   Calculate_MIC(RFM_Data, MIC, RFM_Package_Length, Frame_Counter_Tx, Direction);
 
@@ -299,7 +343,7 @@ void TinyLoRa::sendData(unsigned char *Data, unsigned char Data_Length, unsigned
 
   //Add MIC length to RFM package length
   RFM_Package_Length = RFM_Package_Length + 4;
- 
+
   //Send Package
   RFM_Send_Package(RFM_Data, RFM_Package_Length);
 }
@@ -307,59 +351,176 @@ void TinyLoRa::sendData(unsigned char *Data, unsigned char Data_Length, unsigned
 
 /*
 *****************************************************************************************
-* Description : Function to switch RFM to continuous receive mode, used for Class C 
+* Description : Function for sending a package with the RFM
+*
+* Arguments   : *RFM_Tx_Package Pointer to arry with data to be send
+*               Package_Length  Length of the package to send
 *****************************************************************************************
 */
-void TinyLoRa::Continuous_Receive(void){
-  attachInterrupt(0, RFM_Message, RISING);
-  //Clear all interrupts
-  //RFM_Write(0x12, 0xFF);
-  RFM_Write(0x40,0x00); //Change DIO 0 back to RxDone
 
-  //Invert IQ Back
-  RFM_Write(0x33,0x67);
-  RFM_Write(0x3B,0x19);
+void RFM_Send_Package(unsigned char *RFM_Tx_Package, unsigned char Package_Length)
+{
+  detachInterrupt(0);
+  unsigned char i;
+  unsigned char RFM_Tx_Location = 0x00;
   
-  //Change Datarate
-  //RFM_Write(0x1E,0xA4); //SF10 CRC On
-  //RFM_Write(0x1D,0x72); //125 kHz 4/5 coding rate explicit header mode
-  RFM_Write(0x1E,0x84); //SF8 CRC On
-  RFM_Write(0x1D,0x92); //500 kHz 4/5 coding rate explicit header mode
-  RFM_Write(0x26,0x04); //Low datarate optimization off AGC auto on
-  //Sensitivity offset to Bw 500khz
-  RFM_Write(0x36,0x02);
-  RFM_Write(0x3a,0x64);
-  //Set Hop frequency Period to 0
-  RFM_Write(0x24,0x00);
+  //Set RFM in Standby mode wait on mode ready
+  RFM_Write(0x01,0x81);
+  //Clear all interrupts
+  RFM_Write(0x12, 0xFF);
+  while (digitalRead(DIO5) == LOW)
+  {
+    Serial.print(".");
+  }
   
-  //Set carrair frequency
+  // mask all IRQs but TxDone
+  //RFM_Write(0x11, ~0x08); 
+  delay(10);
+
+  //Change DIO mapping to TxDone
+  //Switch DIO0 to TxDone
+  RFM_Write(0x40,0x40);
+
+  //Set carrier frequency
+  // 868.100 MHz / 61.035 Hz = 14222987 = 0xD9068B
   // 904.400 Mhz / 61.035 Hz = 14866880 = 0xE2D9C0
   // 912.500 Mhz / 61.035 Hz = 14950438 = 0xE42026
   // 902.300 Mhz / 61.035 Hz = 14783321 = 0xE19359
-  // 923.300 Mhz / 61.035 Hz = 15127386 = 0xE6D35A  
-  RFM_Write(0x06,0xE6);
-  RFM_Write(0x07,0xD3);
-  RFM_Write(0x08,0x5A);
+  RFM_Write(0x06,0xE4);
+  RFM_Write(0x07,0x20);
+  RFM_Write(0x08,0x26);
 
-  //Switch to continuous receive
-  //Set operation mode to Rx continuous
-  RFM_Write(0x01,0x85);  
+  //SF7 BW 125 kHz
+  RFM_Write(0x1E,0x74); //SF7 CRC On
+  RFM_Write(0x1D,0x72); //125 kHz 4/5 coding rate explicit header mode
+  RFM_Write(0x26,0x04); //Low datarate optimization off AGC auto on
+
+  //Set IQ to normal values
+  RFM_Write(0x33,0x27);
+  RFM_Write(0x3B,0x1D);
+
+  //Set payload length to the right length
+  RFM_Write(0x22,Package_Length);
+
+  //Get location of Tx part of FiFo
+  //RFM_Tx_Location = RFM_Read(0x0E);
+
+  //Set SPI pointer to start of Tx part in FiFo
+  //RFM_Write(0x0D,RFM_Tx_Location);
+  RFM_Write(0x0D,0x80); // hardcoded fifo location according RFM95 specs
+
+  //Write Payload to FiFo
+  for (i = 0;i < Package_Length; i++)
+  {
+    RFM_Write(0x00,*RFM_Tx_Package);
+    RFM_Tx_Package++;
+  }
+
+  //Switch RFM to Tx
+  RFM_Write(0x01,0x83);
+
+  //Wait for TxDone
+  while(digitalRead(DIO0) == LOW)
+  {
+    //Serial.print(".");
+  }
+  
+  Serial.println();
+  Serial.print("Dato enviado TxDone: ");
+  Serial.println(RFM_Read(0x12),HEX);
+  Serial.println();
+  //Clear all RegIrqFlags 
+  RFM_Write(0x12, 0xFF); 
+  //Switch RFM to Rx contuously
+  RFM_Continuous_Receive();
+  Message=0;
+}
+
+
+/*
+*****************************************************************************************
+* Description : Funtion that toggle the NSS and configure the SPI
+*
+* Arguments   : val is the state of the NSS you want to write
+*               to start or finish a the communication
+*****************************************************************************************
+*/
+void RFM_NSS(bool val){
+  if (!val)
+        SPI.beginTransaction(SPISettings(1E6, MSBFIRST, SPI_MODE0));
+    else
+        SPI.endTransaction();
+    //Serial.println(val?">>":"<<");
+    digitalWrite(NSS, val);
+  
+  }
+
+
+/*
+*****************************************************************************************
+* Description : Funtion that writes a register from the RFM
+*
+* Arguments   : RFM_Address Address of register to be written
+*         RFM_Data    Data to be written
+*****************************************************************************************
+*/
+void RFM_Write(unsigned char RFM_Address, unsigned char RFM_Data)
+{
+  //Set NSS pin Low to start communication
+  //digitalWrite(NSS,LOW);
+  RFM_NSS(0);
+
+  //Send Addres with MSB 1 to make it a write command
+  SPI.transfer(RFM_Address | 0x80);
+  //Send Data
+  SPI.transfer(RFM_Data);
+
+  //Set NSS pin High to end communication
+  RFM_NSS(1);
+  //digitalWrite(NSS,HIGH);
+}
+
+/*
+*****************************************************************************************
+* Description : Funtion that reads a register from the RFM
+*
+* Arguments   : RFM_Address Address of register to be read
+*****************************************************************************************
+*/
+int RFM_Read(int addr) {
+    RFM_NSS(0);
+    SPI.transfer(addr & 0x7F);
+    int val = SPI.transfer(0x00);
+    RFM_NSS(1);
+    return val;
 }
 
 
 
-/****  AES functions ******/
+
 /*
 *****************************************************************************************
-* Description : Function used to encrypt and decrypt the data in a LoRaWAN data message
-*
-* Arguments   : *Data pointer to the data to de/encrypt
-*				Data_Length nuber of bytes to be transmitted
-*               Frame_Counter_Up  Frame counter of upstream frames
-*				Direction of msg is up
+* Description : Function to know the status of the LoRA Modem on the Rx time 
+*               It may return 5 bits:  
+*                                    4 - Modem clear 
+*                                    3 - Header info calid
+*                                    2 - Rx on-going
+*                                    1 - Signal synchronized
+*                                    0 - Signal detected
 *****************************************************************************************
 */
-void TinyLoRa::Encrypt_Payload(unsigned char *Data, unsigned char Data_Length, unsigned int Frame_Counter, unsigned char Direction)
+int RFM_Status(void){
+  return RFM_Read(0x18)&0x1F;
+  }
+
+
+
+
+/******************************************Starts AES shit**********************************************/
+
+
+
+void Encrypt_Payload(unsigned char *Data, unsigned char Data_Length, unsigned int Frame_Counter, unsigned char Direction)
 {
   unsigned char i = 0x00;
   unsigned char j;
@@ -403,7 +564,7 @@ void TinyLoRa::Encrypt_Payload(unsigned char *Data, unsigned char Data_Length, u
 
     //Calculate S
     AES_Encrypt(Block_A,AppSkey); //original
-    
+
 
     //Check for last block
     if(i != Number_of_Blocks)
@@ -428,22 +589,12 @@ void TinyLoRa::Encrypt_Payload(unsigned char *Data, unsigned char Data_Length, u
     }
   }
 }
-/*
-*****************************************************************************************
-* Description : Function used to calculate the MIC of data
-*
-* Arguments   : *Data pointer to the data to de/encrypt
-*				Data_Length nuber of bytes to be transmitted
-*				MIC Array of 4 bytes
-*				Frame_Counter_Up  Frame counter of upstream frames
-*				Direction of msg is up
-*****************************************************************************************
-*/
-void TinyLoRa::Calculate_MIC(unsigned char *Data, unsigned char *Final_MIC, unsigned char Data_Length, unsigned int Frame_Counter, unsigned char Direction)
+
+void Calculate_MIC(unsigned char *Data, unsigned char *Final_MIC, unsigned char Data_Length, unsigned int Frame_Counter, unsigned char Direction)
 {
   unsigned char i;
   unsigned char Block_B[16];
-  
+
   unsigned char Key_K1[16] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
@@ -463,8 +614,8 @@ void TinyLoRa::Calculate_MIC(unsigned char *Data, unsigned char *Final_MIC, unsi
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
   };
-  
-  
+
+
   unsigned char Number_of_Blocks = 0x00;
   unsigned char Incomplete_Block_Size = 0x00;
   unsigned char Block_Counter = 0x01;
@@ -556,7 +707,7 @@ void TinyLoRa::Calculate_MIC(unsigned char *Data, unsigned char *Final_MIC, unsi
 
     //Preform XOR with old data
     XOR(New_Data,Old_Data);
-    
+
     //Preform last AES routine
     // read NwkSkey from PROGMEM
     AES_Encrypt(New_Data,NwkSkey);
@@ -595,18 +746,9 @@ void TinyLoRa::Calculate_MIC(unsigned char *Data, unsigned char *Final_MIC, unsi
   Final_MIC[1] = New_Data[1];
   Final_MIC[2] = New_Data[2];
   Final_MIC[3] = New_Data[3];
-	
-  randomNum = Final_MIC[3] & 0x03;
 }
-/*
-*****************************************************************************************
-* Description : Function used to generate keys for the MIC calculation
-*
-* Arguments   : *K1 pointer to Key1
-*				*K2 pointer ot Key2
-*****************************************************************************************
-*/
-void TinyLoRa::Generate_Keys(unsigned char *K1, unsigned char *K2)
+
+void Generate_Keys(unsigned char *K1, unsigned char *K2)
 {
   unsigned char i;
   unsigned char MSB_Key;
@@ -659,7 +801,8 @@ void TinyLoRa::Generate_Keys(unsigned char *K1, unsigned char *K2)
     K2[15] = K2[15] ^ 0x87;
   }
 }
-void TinyLoRa::Shift_Left(unsigned char *Data)
+
+void Shift_Left(unsigned char *Data)
 {
   unsigned char i;
   unsigned char Overflow = 0;
@@ -690,7 +833,7 @@ void TinyLoRa::Shift_Left(unsigned char *Data)
   }
 }
 
-void TinyLoRa::XOR(unsigned char *New_Data,unsigned char *Old_Data)
+void XOR(unsigned char *New_Data,unsigned char *Old_Data)
 {
   unsigned char i;
 
@@ -699,17 +842,18 @@ void TinyLoRa::XOR(unsigned char *New_Data,unsigned char *Old_Data)
     New_Data[i] = New_Data[i] ^ Old_Data[i];
   }
 }
+
 /*
 *****************************************************************************************
 * Title         : AES_Encrypt
-* Description  : 
+* Description  :
 *****************************************************************************************
 */
-void TinyLoRa::AES_Encrypt(unsigned char *Data, unsigned char *Key)
+void AES_Encrypt(unsigned char *Data, unsigned char *Key)
 {
   unsigned char Row, Column, Round = 0;
   unsigned char Round_Key[16];
-  unsigned char State[4][4];
+    unsigned char State[4][4];
 
   //  Copy input to State arry
   for( Column = 0; Column < 4; Column++ )
@@ -759,7 +903,7 @@ void TinyLoRa::AES_Encrypt(unsigned char *Data, unsigned char *Key)
       State[Row][Column] = AES_Sub_Byte(State[Row][Column]);
     }
   }
-    
+
   //  Shift rows
   AES_Shift_Rows(State);
 
@@ -783,10 +927,10 @@ void TinyLoRa::AES_Encrypt(unsigned char *Data, unsigned char *Key)
 /*
 *****************************************************************************************
 * Title         : AES_Add_Round_Key
-* Description : 
+* Description :
 *****************************************************************************************
 */
-void TinyLoRa::AES_Add_Round_Key(unsigned char *Round_Key, unsigned char (*State)[4])
+void AES_Add_Round_Key(unsigned char *Round_Key, unsigned char (*State)[4])
 {
   unsigned char Row, Collum;
 
@@ -803,10 +947,10 @@ void TinyLoRa::AES_Add_Round_Key(unsigned char *Round_Key, unsigned char (*State
 /*
 *****************************************************************************************
 * Title         : AES_Sub_Byte
-* Description : 
+* Description :
 *****************************************************************************************
 */
-unsigned char TinyLoRa::AES_Sub_Byte(unsigned char Byte){
+unsigned char AES_Sub_Byte(unsigned char Byte){
 //  unsigned char S_Row,S_Collum;
 //  unsigned char S_Byte;
 //
@@ -822,10 +966,10 @@ unsigned char TinyLoRa::AES_Sub_Byte(unsigned char Byte){
 /*
 *****************************************************************************************
 * Title         : AES_Shift_Rows
-* Description : 
+* Description :
 *****************************************************************************************
 */
-void TinyLoRa::AES_Shift_Rows(unsigned char (*State)[4])
+void AES_Shift_Rows(unsigned char (*State)[4])
 {
   unsigned char Buffer;
 
@@ -849,20 +993,21 @@ void TinyLoRa::AES_Shift_Rows(unsigned char (*State)[4])
   State[3][2] = State[3][1];
   State[3][1] = State[3][0];
   State[3][0] = Buffer;
-}
+}   //  AES_Shift_Rows
+
 
 /*
 *****************************************************************************************
 * Title         : AES_Mix_Collums
-* Description : 
+* Description :
 *****************************************************************************************
 */
-void TinyLoRa::AES_Mix_Collums(unsigned char (*State)[4])
+void AES_Mix_Collums(unsigned char (*State)[4])
 {
   unsigned char Row,Collum;
   unsigned char a[4], b[4];
-    
-    
+
+
   for(Collum = 0; Collum < 4; Collum++)
   {
     for(Row = 0; Row < 4; Row++)
@@ -875,7 +1020,7 @@ void TinyLoRa::AES_Mix_Collums(unsigned char (*State)[4])
         b[Row] ^= 0x1B;
       }
     }
-        
+
     State[0][Collum] = b[0] ^ a[1] ^ b[1] ^ a[2] ^ a[3];
     State[1][Collum] = a[0] ^ b[1] ^ a[2] ^ b[2] ^ a[3];
     State[2][Collum] = a[0] ^ a[1] ^ b[2] ^ a[3] ^ b[3];
@@ -888,29 +1033,29 @@ void TinyLoRa::AES_Mix_Collums(unsigned char (*State)[4])
 /*
 *****************************************************************************************
 * Title         : AES_Calculate_Round_Key
-* Description : 
+* Description :
 *****************************************************************************************
 */
-void TinyLoRa::AES_Calculate_Round_Key(unsigned char Round, unsigned char *Round_Key)
+void AES_Calculate_Round_Key(unsigned char Round, unsigned char *Round_Key)
 {
   unsigned char i, j, b, Rcon;
   unsigned char Temp[4];
 
-    
+
     //Calculate Rcon
   Rcon = 0x01;
   while(Round != 1)
   {
     b = Rcon & 0x80;
     Rcon = Rcon << 1;
-        
+
     if(b == 0x80)
     {
       Rcon ^= 0x1b;
     }
     Round--;
   }
-    
+
   //  Calculate first Temp
   //  Copy laste byte from previous key and subsitute the byte, but shift the array contents around by 1.
     Temp[0] = AES_Sub_Byte( Round_Key[12 + 1] );
@@ -930,4 +1075,5 @@ void TinyLoRa::AES_Calculate_Round_Key(unsigned char Round, unsigned char *Round
       Temp[j]                   = Round_Key[j + (i << 2)];
     }
   }
-}
+}   //  AES_Calculate_Round_Key
+
